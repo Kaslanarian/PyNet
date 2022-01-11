@@ -2,9 +2,10 @@ import numpy as np
 
 
 class BaseOptimizer:
-    def __init__(self, *params) -> None:
-        self.params = list(params)
-        self.n_params = len(params)
+    '''优化器基类'''
+    def __init__(self, params_list: list) -> None:
+        self.params = params_list
+        self.n_params = len(params_list)
 
     def step(self, *grad_params):
         assert len(grad_params) == self.n_params
@@ -14,8 +15,9 @@ class BaseOptimizer:
 
 
 class BGD(BaseOptimizer):
-    def __init__(self, *params, lr=0.1) -> None:
-        super().__init__(*params)
+    '''普通BGD'''
+    def __init__(self, params_list: list, lr=0.1) -> None:
+        super().__init__(params_list)
         self.lr = lr
 
     def step(self, *grad_params):
@@ -27,22 +29,56 @@ class BGD(BaseOptimizer):
         return super().get_params()
 
 
-class NoisyBGD(BaseOptimizer):
-    def __init__(self, *params, lr=0.1, gamma=0.9) -> None:
-        super().__init__(*params)
+class FIX_DECAY_BGD(BaseOptimizer):
+    '''
+    学习率固定衰减方法下的BGD
+    可选的方法(method)有
+    - invt : 逆时衰减
+    - exp  : 指数衰减
+    - nexp:自然指数衰减
+    '''
+    def __init__(self,
+                 params_list: list,
+                 lr=1,
+                 method="exp",
+                 beta=0.9) -> None:
+        super().__init__(params_list)
         self.lr = lr
-        self.gamma = gamma
-        self.t = 0
+        self.method = method
+        self.epoch = 0
+        self.beta = beta
 
     def step(self, *grad_params):
         super().step(*grad_params)
-        sigma = (self.lr / (1 + self.t)**self.gamma)**0.5
+
+        self.lr *= {
+            "invt": (1 - 1 / (1 + self.beta * self.epoch + self.beta)),
+            "exp": self.beta,
+            "nexp": np.exp(-self.beta),
+        }[self.method]
+
         for param_id in range(self.n_params):
-            self.params[param_id] -= self.lr * (
-                grad_params[param_id] + np.random.normal(
-                    size=grad_params[param_id].shape,
-                    scale=sigma,
-                ))
+            self.params[param_id] -= self.lr * grad_params[param_id]
+        self.epoch += 1
+
+    def get_params(self):
+        return super().get_params()
+
+
+class WARM_UP_BGD(BaseOptimizer):
+    '''预热学习率BGD，但不能作为整个训练过程的BGD'''
+    def __init__(self, params_list: list, lr=0.5, T=10) -> None:
+        super().__init__(params_list)
+        self.lr = lr
+        self.t = 1
+        self.T = 10
+
+    def step(self, *grad_params):
+        super().step(*grad_params)
+        assert self.t <= self.T  # 在指定轮数过后，预热结束
+        for param_id in range(self.n_params):
+            self.params[param_id] -= (self.t /
+                                      self.T) * self.lr * grad_params[param_id]
         self.t += 1
 
     def get_params(self):
@@ -50,11 +86,12 @@ class NoisyBGD(BaseOptimizer):
 
 
 class Momentum(BaseOptimizer):
-    def __init__(self, *params, lr=0.1, momentum=0.9) -> None:
-        super().__init__(*params)
+    '''动量机制的梯度下降'''
+    def __init__(self, params_list: list, lr=0.1, momentum=0.9) -> None:
+        super().__init__(params_list)
         self.lr = lr
         self.momentum = momentum
-        self.v = [np.zeros(param.shape) for param in params]
+        self.v = [np.zeros(param.shape) for param in params_list]
 
     def step(self, *grad_params):
         super().step(*grad_params)
@@ -67,41 +104,12 @@ class Momentum(BaseOptimizer):
         return super().get_params()
 
 
-class Nesterov(BaseOptimizer):
-    def __init__(self, *params, lr=0.1, momentum=0.9) -> None:
-        super().__init__(*params)
-        self.lr = lr
-        self.momentum = momentum
-        self.v = [np.zeros(param.shape) for param in params]
-        self.real_params = [np.copy(param) for param in params]
-
-    def step(self, *grad_params):
-        '''
-        在Nesterov中, grad_params是预测位置的梯度
-        '''
-        super().step(*grad_params)
-        for param_id in range(self.n_params):
-            # v_t = gamma * v_{t-1} + lr * grad(theta - gamma * v_{t-1})
-            self.v[param_id] = self.momentum * self.v[
-                param_id] + self.lr * grad_params[param_id]
-            # theta = theta - v_t
-            self.real_params[param_id] -= self.v[param_id]
-            # theta - gamma * v_t，对于下一轮就是theta - gamma * v_{t-1}
-            self.params[param_id] = self.real_params[
-                param_id] - self.momentum * self.v[param_id]
-
-    def get_params(self):
-        return super().get_params()
-
-    def get_real_params(self):
-        return self.real_params
-
-
 class Adagrad(BaseOptimizer):
-    def __init__(self, *params, lr=0.01) -> None:
-        super().__init__(*params)
+    '''Adagrad下降'''
+    def __init__(self, params_list: list, lr=0.01) -> None:
+        super().__init__(params_list)
         self.lr = lr
-        self.G = [np.zeros(param.shape) for param in params]
+        self.G = [np.zeros(param.shape) for param in params_list]
 
     def step(self, *grad_params):
         super().step(*grad_params)
@@ -115,11 +123,12 @@ class Adagrad(BaseOptimizer):
 
 
 class Adadelta(BaseOptimizer):
-    def __init__(self, *params, lr=0.001, gamma=0.9) -> None:
-        super().__init__(*params)
+    '''Adadelta下降'''
+    def __init__(self, params_list: list, lr=0.001, gamma=0.9) -> None:
+        super().__init__(params_list)
         self.lr = lr
         self.gamma = gamma
-        self.G = [np.zeros(param.shape) for param in params]
+        self.G = [np.zeros(param.shape) for param in params_list]
 
     def step(self, *grad_params):
         super().step(*grad_params)
@@ -135,13 +144,18 @@ class Adadelta(BaseOptimizer):
 
 
 class Adam(BaseOptimizer):
-    def __init__(self, *params, lr=0.001, beta1=0.9, beta2=0.999) -> None:
-        super().__init__(*params)
+    '''Adam下降'''
+    def __init__(self,
+                 params_list: list,
+                 lr=0.001,
+                 beta1=0.9,
+                 beta2=0.999) -> None:
+        super().__init__(params_list)
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
-        self.m = [np.zeros(param.shape) for param in params]
-        self.v = [np.zeros(param.shape) for param in params]
+        self.m = [np.zeros(param.shape) for param in params_list]
+        self.v = [np.zeros(param.shape) for param in params_list]
         self.epoch = 0
 
     def step(self, *grad_params):
