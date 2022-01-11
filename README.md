@@ -1,2 +1,2 @@
 # welt-net
- Multi-layer perceptron based on Numpy
+ Use numpy to build neuron network
