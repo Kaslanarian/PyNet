@@ -4,7 +4,7 @@
 
 ## 多层神经网络
 
-我们能想下面这样初始化神经网络:
+我们能像下面这样初始化神经网络:
 
 ```python
 from Net import net
@@ -102,3 +102,26 @@ net = net = Net(
 ![performance](src/digits.png)
 
 同时将模型文件保存为`model/digits`文本文件。
+
+## 命令行模式
+
+受到libsvm的启发，我们设计了命令行交互的单隐层训练模式。比如通过输入下面的命令
+
+```bash
+python train.py -std -he -reg 2 -e 20 heart_scale
+```
+
+就可以采用He初始化，使用L2正则化的单隐层网络，对`heart_scale`数据集标准化，然后进行20轮训练，并将模型保存至默认的`heart_scale.model`文件中。接着输入
+
+```bash
+python predict.py heart_scale.model heart_scale output
+```
+
+就可以用保存的模型对数据集进行预测，将预测结果输出到output文件中。上述命令的参数规定可以通过
+
+```bash
+python train.py -h
+python predict.py -h
+```
+
+来进行了解。
