@@ -1,4 +1,4 @@
-# welt-net
+# PyNet
  Use numpy to build neuron network
  基于Numpy的神经网络
 
