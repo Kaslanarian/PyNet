@@ -1,6 +1,8 @@
 # PyNet
  Use numpy to build neuron network
  基于Numpy的神经网络
+ 
+ 我们使用NumPy实现了基于自动微分的神经网络：<https://github.com/Kaslanarian/PyDyNet>. 它是PyNet的延伸和拓展。
 
 ## 多层神经网络
 
